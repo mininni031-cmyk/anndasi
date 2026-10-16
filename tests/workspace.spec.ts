@@ -51,3 +51,34 @@ test('exports the active CSV separately from synthetic sample data',async({page}
  await page.getByRole('button',{name:'CSVを書き出す'}).click();
  expect((await downloadPromise).suggestedFilename()).toContain('JP-1d');
 });
+test('replay hides future outcomes and exports only visible history',async({page})=>{
+ await page.goto('/');await expect(page.getByTestId('match-card')).toHaveCount(5);
+ await page.getByRole('button',{name:'先頭',exact:true}).click();
+ await expect(page.getByTestId('replay-count')).toHaveText('20本時点');
+ await expect(page.getByTestId('match-card')).toHaveCount(0);
+ await expect(page.getByTestId('pattern-panel')).toBeVisible();
+ const downloaded=page.waitForEvent('download');
+ await page.getByRole('button',{name:'CSVを書き出す'}).click();
+ const file=await downloaded;const stream=await file.createReadStream();
+ const chunks:Buffer[]=[];for await(const chunk of stream!)chunks.push(chunk);
+ expect(Buffer.concat(chunks).toString().trim().split('\n')).toHaveLength(21);
+ await page.getByRole('button',{name:'1本進む',exact:true}).click();
+ await expect(page.getByTestId('replay-count')).toHaveText('21本時点');
+ await page.getByRole('button',{name:'再生',exact:true}).click();
+ await expect(page.getByTestId('replay-count')).not.toHaveText('21本時点');
+ await page.getByRole('button',{name:'停止',exact:true}).click();
+ await page.getByRole('button',{name:'末尾',exact:true}).click();
+ await expect(page.getByTestId('match-card')).toHaveCount(5);
+ await expect(page.getByRole('region',{name:'期間別研究結果'})).toContainText('根拠不足');
+});
+test('shows net match outcome and selected descriptive summary with costs',async({page})=>{
+ await page.goto('/');await expect(page.getByTestId('match-card')).toHaveCount(5);
+ await page.getByLabel('片道コストbps').fill('0');
+ await expect(page.getByRole('region',{name:'期間別研究結果'})).toContainText('往復0bps');
+ const before=Number((await page.getByTestId('match-net20').first().innerText()).replace(/[^\d.+-]/g,''));
+ await page.getByLabel('片道コストbps').fill('100');
+ await expect(page.getByRole('region',{name:'期間別研究結果'})).toContainText('往復200bps');
+ const after=Number((await page.getByTestId('match-net20').first().innerText()).replace(/[^\d.+-]/g,''));
+ expect(before-after).toBeCloseTo(2,1);
+ await expect(page.getByTestId('selected-summary')).toContainText('選択バイアス');
+});

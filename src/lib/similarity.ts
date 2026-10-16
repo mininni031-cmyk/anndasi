@@ -15,17 +15,21 @@ function features(candles:Candle[]):number[][] {
  const activity=candles.flatMap(c=>[Math.min(1e12,(c.high/maxPrice-c.low/maxPrice)/Math.max(base,Number.MIN_VALUE)),meanVolume?(c.volume/maxVolume)/meanVolume:0]);
  return [shape,foot(candles[19]),candles.slice(-3).flatMap(foot),activity];
 }
-export function findSimilar(candles:Candle[]):Match[] {
+export function similarityCandidates(candles:Candle[],horizon=0):Match[] {
  if(candles.length<40)return [];
  const queryStart=candles.length-WINDOW;
  const query=features(candles.slice(queryStart));
  const weights=[.5,.25,.15,.1];const candidates:Match[]=[];
- for(let start=0;start+WINDOW<=queryStart;start++){
+ for(let start=0;start+WINDOW+horizon<=queryStart;start++){
   const f=features(candles.slice(start,start+WINDOW));
   const distance=f.reduce((sum,group,i)=>sum+weights[i]*group.reduce((s,v,j)=>s+Math.abs(v-query[i][j]),0)/group.length,0);
   candidates.push({startIndex:start,endIndex:start+WINDOW-1,score:100/(1+distance)});
  }
  candidates.sort((a,b)=>b.score-a.score||candles[a.startIndex].time-candles[b.startIndex].time);
+ return candidates;
+}
+export function findSimilar(candles:Candle[]):Match[] {
+ const candidates=similarityCandidates(candles);
  const selected:Match[]=[];
  for(const c of candidates){
   if(selected.every(m=>c.endIndex<m.startIndex||c.startIndex>m.endIndex))selected.push(c);
