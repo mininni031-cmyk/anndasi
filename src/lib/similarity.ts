@@ -1,13 +1,18 @@
 import type { Candle,Match } from './types';
 const WINDOW=20;
 function features(candles:Candle[]):number[][] {
- const base=candles[0].close;
- const relative=candles.flatMap(c=>[c.open/base-1,c.high/base-1,c.low/base-1,c.close/base-1]);
- const scale=Math.max(Math.max(...relative)-Math.min(...relative),1e-8);
- const shape=relative.map(v=>v/scale);
- const foot=(c:Candle)=>[(c.close-c.open)/base/scale,(c.high-Math.max(c.open,c.close))/base/scale,(Math.min(c.open,c.close)-c.low)/base/scale];
- const meanVolume=candles.reduce((s,c)=>s+c.volume,0)/WINDOW;
- const activity=candles.flatMap(c=>[(c.high-c.low)/base,meanVolume?c.volume/meanVolume:0]);
+ // Algebraically equivalent price normalization, scaled before subtraction/division.
+ // Avoids overflowing price/base when both input prices are individually finite.
+ const maxPrice=Math.max(...candles.map(c=>c.high));
+ const base=candles[0].close/maxPrice;
+ const prices=candles.flatMap(c=>[c.open/maxPrice,c.high/maxPrice,c.low/maxPrice,c.close/maxPrice]);
+ const scale=Math.max(Math.max(...prices)-Math.min(...prices),1e-8*base,Number.MIN_VALUE);
+ const shape=prices.map(v=>(v-base)/scale);
+ const foot=(c:Candle)=>[(c.close/maxPrice-c.open/maxPrice)/scale,(c.high/maxPrice-Math.max(c.open,c.close)/maxPrice)/scale,(Math.min(c.open,c.close)/maxPrice-c.low/maxPrice)/scale];
+ const maxVolume=Math.max(...candles.map(c=>c.volume));
+ const meanVolume=maxVolume?candles.reduce((s,c)=>s+c.volume/maxVolume/WINDOW,0):0;
+ // Only astronomically large relative ranges saturate; all emitted features stay finite.
+ const activity=candles.flatMap(c=>[Math.min(1e12,(c.high/maxPrice-c.low/maxPrice)/Math.max(base,Number.MIN_VALUE)),meanVolume?(c.volume/maxVolume)/meanVolume:0]);
  return [shape,foot(candles[19]),candles.slice(-3).flatMap(foot),activity];
 }
 export function findSimilar(candles:Candle[]):Match[] {

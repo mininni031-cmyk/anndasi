@@ -1,6 +1,7 @@
 'use client';
 import {useEffect,useRef} from 'react';
 import {createChart,CandlestickSeries,LineSeries,HistogramSeries,ColorType,type UTCTimestamp} from 'lightweight-charts';
+import {movingAverage} from '@/lib/indicators';
 import type {Candle,Timeframe} from '@/lib/types';
 export default function PriceChart({candles,timeframe}:{candles:Candle[];timeframe:Timeframe}){
  const host=useRef<HTMLDivElement>(null);
@@ -18,10 +19,7 @@ export default function PriceChart({candles,timeframe}:{candles:Candle[];timefra
   series.setData(candles.map(c=>({...c,time:c.time as UTCTimestamp})));
   for(const [period,color] of [[5,'#e4b26b'],[20,'#8194f5']] as const){
    const ma=chart.addSeries(LineSeries,{color,lineWidth:1,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
-   let sum=0;ma.setData(candles.flatMap((c,i)=>{
-    sum+=c.close;if(i>=period)sum-=candles[i-period].close;
-    return i<period-1?[]:[{time:c.time as UTCTimestamp,value:sum/period}];
-   }));
+   ma.setData(movingAverage(candles,period).map(p=>({...p,time:p.time as UTCTimestamp})));
   }
   const volume=chart.addSeries(HistogramSeries,{priceFormat:{type:'volume'},priceScaleId:'volume',priceLineVisible:false,lastValueVisible:false});
   volume.priceScale().applyOptions({scaleMargins:{top:.84,bottom:0}});

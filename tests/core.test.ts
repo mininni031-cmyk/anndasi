@@ -56,3 +56,9 @@ describe('similarity',()=>{
   expect(findSimilar(generateDemo('US').candles.slice(0,39))).toEqual([]);
  });
 });
+describe('numeric boundaries',()=>{
+ it('returns finite exact-match scores for accepted extreme finite prices and volumes',()=>{
+  const candles=Array.from({length:40},(_,i)=>{const price=i%20===0?1e-308:1e308;return {time:i,open:price,high:price,low:price,close:price,volume:1e308};});
+  expect(findSimilar(candles)[0].score).toBe(100);
+ });
+});
