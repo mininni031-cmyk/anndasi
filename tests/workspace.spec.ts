@@ -13,7 +13,7 @@ test('CSV research flow, errors and local restoration',async({page})=>{
  await expect(page.getByTestId('data-source')).toHaveText('CSV / ローカル');
  await expect(page.getByTestId('match-card')).toHaveCount(5);
  await page.getByLabel('CSVファイル').setInputFiles({name:'bad.csv',mimeType:'text/csv',buffer:Buffer.from('time,open\n2026-01-01,100')});
- await expect(page.getByRole('alert')).toContainText('必須列');
+ await expect(page.getByRole('alert',{name:'CSV読込エラー'})).toContainText('必須列');
  await expect(page.getByTestId('data-source')).toHaveText('CSV / ローカル');
  await page.reload();
  await expect(page.getByTestId('data-source')).toHaveText('CSV / ローカル');
@@ -35,4 +35,19 @@ test('short CSV is charted with an honest insufficient-history status',async({pa
  await expect(page.getByTestId('dataset-name')).toHaveText('SHORT');
  await expect(page.getByText('分析には20本以上のローソク足が必要です。')).toBeVisible();
  await expect(page.getByTestId('match-card')).toHaveCount(0);
+});
+test('unavailable storage still allows charts and imports',async({page})=>{
+ await page.addInitScript(()=>{indexedDB.open=()=>{throw new Error('storage unavailable');};});
+ await page.goto('/');await expect(page.getByTestId('match-card')).toHaveCount(5);
+ await expect(page.getByRole('status')).toContainText('復元できません');
+ await page.getByLabel('CSVファイル').setInputFiles({name:'local.csv',mimeType:'text/csv',buffer:Buffer.from('time,open,high,low,close,volume\n2026-01-01,100,110,90,105,1000')});
+ await expect(page.getByTestId('data-source')).toHaveText('CSV / ローカル');
+ await expect(page.getByRole('status')).toContainText('保存できません');
+});
+test('exports the active CSV separately from synthetic sample data',async({page})=>{
+ await page.goto('/');await expect(page.getByTestId('match-card')).toHaveCount(5);
+ await expect(page.getByRole('button',{name:'CSVを書き出す'})).toBeVisible();
+ const downloadPromise=page.waitForEvent('download');
+ await page.getByRole('button',{name:'CSVを書き出す'}).click();
+ expect((await downloadPromise).suggestedFilename()).toContain('JP-1d');
 });
