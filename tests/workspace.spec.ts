@@ -23,7 +23,7 @@ test('CSV research flow, errors and local restoration',async({page})=>{
  await expect(page.getByTestId('dataset-timeframe')).toHaveText('1分足');
  await expect(page.getByTestId('match-card')).toHaveCount(5);
  await page.getByRole('button',{name:'保存データを削除'}).click();
- await expect(page.getByRole('status')).toContainText('保存データを削除');
+ await expect(page.getByRole('status',{name:'データ状態'})).toContainText('保存データを削除');
  await page.reload();
  await expect(page.getByTestId('dataset-timeframe')).toHaveText('日足');
  expect(errors).toEqual([]);
@@ -39,10 +39,10 @@ test('short CSV is charted with an honest insufficient-history status',async({pa
 test('unavailable storage still allows charts and imports',async({page})=>{
  await page.addInitScript(()=>{indexedDB.open=()=>{throw new Error('storage unavailable');};});
  await page.goto('/');await expect(page.getByTestId('match-card')).toHaveCount(5);
- await expect(page.getByRole('status')).toContainText('復元できません');
+ await expect(page.getByRole('status',{name:'データ状態'})).toContainText('復元できません');
  await page.getByLabel('CSVファイル').setInputFiles({name:'local.csv',mimeType:'text/csv',buffer:Buffer.from('time,open,high,low,close,volume\n2026-01-01,100,110,90,105,1000')});
  await expect(page.getByTestId('data-source')).toHaveText('CSV / ローカル');
- await expect(page.getByRole('status')).toContainText('保存できません');
+ await expect(page.getByRole('status',{name:'データ状態'})).toContainText('保存できません');
 });
 test('exports the active CSV separately from synthetic sample data',async({page})=>{
  await page.goto('/');await expect(page.getByTestId('match-card')).toHaveCount(5);
@@ -81,4 +81,63 @@ test('shows net match outcome and selected descriptive summary with costs',async
  const after=Number((await page.getByTestId('match-net20').first().innerText()).replace(/[^\d.+-]/g,''));
  expect(before-after).toBeCloseTo(2,1);
  await expect(page.getByTestId('selected-summary')).toContainText('選択バイアス');
+});
+test('PAPER buy, partial sale, restore, cancel and future-account shielding',async({page})=>{
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('/');await expect(page.getByTestId('paper-account')).toBeVisible();
+ await page.getByRole('button',{name:'先頭',exact:true}).click();
+ await page.getByLabel('判断メモ').fill('W形状を確認。仮想売買の練習');
+ await expect(page.getByRole('button',{name:'仮想買付を注文'})).toBeEnabled();
+ await page.getByRole('button',{name:'仮想買付を注文'}).click();
+ await expect(page.getByText('OPEN',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'1本進む',exact:true}).click();
+ await expect(page.getByTestId('paper-quantity')).toHaveText('100 / 100');
+ await page.getByRole('button',{name:'売却',exact:true}).click();
+ await page.getByLabel('注文数量').fill('50');await page.getByLabel('売買単位').fill('1');
+ await page.getByRole('button',{name:'仮想売却を注文'}).click();
+ await page.getByRole('button',{name:'1本進む',exact:true}).click();
+ await expect(page.getByTestId('paper-quantity')).toHaveText('50 / 50');
+ await page.reload();await expect(page.getByTestId('paper-quantity')).toHaveText('50 / 50');
+ await expect(page.getByTestId('replay-count')).toHaveText('22本時点');
+ await page.getByRole('button',{name:'売却',exact:true}).click();
+ await page.getByRole('button',{name:'全株数を入力'}).click();
+ await page.getByRole('button',{name:'仮想売却を注文'}).click();
+ await page.getByRole('button',{name:'1本進む',exact:true}).click();
+ await expect(page.getByTestId('paper-quantity')).toHaveText('0 / 0');
+ await page.getByRole('button',{name:'1本戻る',exact:true}).click();
+ await expect(page.getByTestId('paper-past')).toBeVisible();
+ await expect(page.getByTestId('paper-account')).toHaveCount(0);
+ expect(errors).toEqual([]);
+});
+test('paper synchronization retries a transient write failure without moving replay again',async({page})=>{
+ await page.addInitScript(()=>{
+  const original=IDBObjectStore.prototype.put;
+  IDBObjectStore.prototype.put=function(value:unknown,key?:IDBValidKey){
+   if((window as unknown as {failPaper?:boolean}).failPaper&&typeof key==='string'&&key.startsWith('paper:'))throw new Error('書き込みテスト失敗');
+   return key===undefined?original.call(this,value):original.call(this,value,key);
+  };
+ });
+ await page.goto('/');await expect(page.getByTestId('paper-account')).toBeVisible();
+ await page.getByRole('button',{name:'先頭',exact:true}).click();
+ await page.getByRole('button',{name:'仮想買付を注文'}).click();
+ await expect(page.getByText('OPEN',{exact:true})).toBeVisible();
+ await page.evaluate(()=>{(window as unknown as {failPaper:boolean}).failPaper=true;});
+ await page.getByRole('button',{name:'1本進む',exact:true}).click();
+ await expect(page.getByRole('alert',{name:'仮想口座エラー'})).toContainText('書き込みテスト失敗');
+ await page.evaluate(()=>{(window as unknown as {failPaper:boolean}).failPaper=false;});
+ await expect(page.getByTestId('paper-quantity')).toHaveText('100 / 100');
+ await expect(page.getByTestId('replay-count')).toHaveText('21本時点');
+});
+test('corrupt paper journal shows recoverable error and reset instead of crashing',async({page})=>{
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('/');await expect(page.getByTestId('paper-account')).toBeVisible();
+ await page.getByRole('button',{name:'見送りを記録'}).click();
+ await expect(page.getByRole('status',{name:'仮想口座状態'})).toContainText('見送りを記録');
+ await page.evaluate(()=>new Promise<void>((resolve,reject)=>{
+  const r=indexedDB.open('pattern-lab',1);r.onsuccess=()=>{const db=r.result,tx=db.transaction('workspace','readwrite'),s=tx.objectStore('workspace'),g=s.get('paper:demo-JP');g.onsuccess=()=>s.put({...g.result,journal:[null]},'paper:demo-JP');tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>reject(tx.error);};
+ }));
+ await page.reload();await expect(page.getByRole('alert',{name:'仮想口座エラー'})).toBeVisible();
+ await page.getByRole('button',{name:'仮想口座をリセット',exact:true}).click();
+ await page.getByRole('button',{name:'リセットを確定',exact:true}).click();
+ await expect(page.getByTestId('paper-quantity')).toHaveText('0 / 0');expect(errors).toEqual([]);
 });

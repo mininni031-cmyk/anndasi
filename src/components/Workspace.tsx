@@ -9,6 +9,7 @@ import {clearDataset,restoreDataset,saveDataset} from '@/lib/storage';
 import PriceChart from './PriceChart';
 import MatchCard from './MatchCard';
 import ResearchPanel from './ResearchPanel';
+import PaperDesk from './PaperDesk';
 import {detectPattern} from '@/lib/patterns';
 import type {Research} from '@/lib/research';
 export default function Workspace(){
@@ -16,13 +17,16 @@ export default function Workspace(){
  const [market,setMarket]=useState<Market>('JP');
  const [timeframe,setTimeframe]=useState<Timeframe>('1d');
  const [name,setName]=useState('MY-JP');
+ const [memo,setMemo]=useState('');
+ const [paperEpoch,setPaperEpoch]=useState(0);
+ const [searchVersion,setSearchVersion]=useState(0);
  const [position,setPosition]=useState<{id:string;count:number}>({id:'',count:0});
  const [playing,setPlaying]=useState(false);
  const [cost,setCost]=useState(10);
  const cursor=dataset?(position.id===dataset.id?Math.min(position.count,dataset.candles.length):dataset.candles.length):0;
  const visible=useMemo(()=>dataset?.candles.slice(0,cursor)??[],[dataset,cursor]);
  const pattern=useMemo(()=>detectPattern(visible),[visible]);
- const viewKey=`${dataset?.id}:${cursor}:${cost}`;
+ const viewKey=`${dataset?.id}:${cursor}:${cost}:${searchVersion}`;
  const [result,setResult]=useState<{id:string;data:Research|null}>({id:'',data:null});
  const analysis=result.id===viewKey?result.data:null;
  const matches=analysis?.matches??[];
@@ -94,7 +98,7 @@ export default function Workspace(){
  }
  async function clear(){
   const token=++action.current;setLoading(false);setError('');setSaveState('削除中…');
-  setDataset(generateDemo('JP'));setMarket('JP');setTimeframe('1d');setName('MY-JP');
+  setPaperEpoch(v=>v+1);setDataset(generateDemo('JP'));setMarket('JP');setTimeframe('1d');setName('MY-JP');
   try{await clearDataset();if(action.current===token){setSaveState('未保存 / 架空データ');setNotice('保存データを削除しました。架空日本株に戻しました。');}}
   catch{if(action.current===token){setSaveState('削除失敗');setError('保存データを削除できませんでした。ブラウザのサイトデータ設定を確認してください。');}}
  }
@@ -108,34 +112,35 @@ export default function Workspace(){
  const change=last&&prev?(last.close/prev.close-1)*100:0;
  const query=visible.slice(-20);
  return <main className="workspace">
-  <header className="app-header"><a className="brand" href="/" aria-label="PATTERN LAB ホーム"><span className="brand-icon">▥</span><div><h1>PATTERN <b>LAB</b></h1><span>CHART RESEARCH WORKSPACE</span></div></a><div className="header-right"><span className="phase-badge">PHASE 02</span><span className="local-badge"><i/> LOCAL WORKSPACE</span></div></header>
-  <section className="intro"><div><p className="eyebrow">OBSERVE. COMPARE. UNDERSTAND.</p><h2>形を見つけ、<span>判断を磨く。</span></h2><p>似ている、その先を考えるためのチャート研究室。</p></div><div className="principle"><span>RESEARCH PRINCIPLE</span><p>取引しない判断も、<br/>正しい行動として扱う。</p></div></section>
-  <section className="import-panel" aria-label="データの選択"><div className="panel-label"><span className="step">01</span><div><strong>データを選ぶ</strong><small>CSVはこのブラウザ内だけで処理</small></div></div>
+  <header className="app-header"><a className="brand" href="/" aria-label="PATTERN LAB ホーム"><span className="brand-icon"><i/><i/><i/><i/><i/></span><div><h1>PATTERN LAB</h1><span>DAYTRADE SIMULATOR</span></div></a><p className="brand-tagline">過去の相場から学び、<br/>根拠のあるトレード判断を。</p><nav className="dashboard-nav" aria-label="メインナビ"><a className="active" href="#replay">▶ Replay</a><a href="#trade-check">☑ Trade Check</a><a href="#journal">▤ Journal</a><a href="#research">▥ Research</a><a href="#local-session">⚙ Settings</a></nav><span className="paper-mode-badge">PAPER</span></header>
+  <section className="import-panel" aria-label="データの選択"><div className="panel-label"><strong>相場データ</strong></div>
    <div className="controls"><label>市場<select aria-label="市場" value={market} disabled={!ready} onChange={e=>setMarket(e.target.value as Market)}><option value="JP">日本株 / JPY</option><option value="US">米国株 / USD</option></select></label><label>時間足<select aria-label="時間足" value={timeframe} disabled={!ready} onChange={e=>setTimeframe(e.target.value as Timeframe)}><option value="1d">日足</option><option value="1m">1分足</option><option disabled>5分足 · 未実装</option><option disabled>週足 · 未実装</option></select></label><label className="symbol-control">銘柄名<input aria-label="銘柄名" value={name} maxLength={80} disabled={!ready} onChange={e=>setName(e.target.value)} placeholder="例：MY-JP"/></label></div>
-   <div className="import-actions"><button className="button secondary" disabled={!ready} onClick={showDemo}>架空データを表示</button><label className={`button primary file-button ${!ready||loading?'disabled':''}`}><span>↥</span> {loading?'読み込み中…':'CSVを読み込む'}<input aria-label="CSVファイル" type="file" accept=".csv,text/csv" disabled={!ready||loading} onChange={importFile}/></label></div>
+   <div className="import-actions"><button className="button search-button" disabled={!ready} onClick={()=>setSearchVersion(v=>v+1)}>⌕ パターン検索</button><button className="button secondary" disabled={!ready} onClick={showDemo}>架空データを表示</button><label className={`button primary file-button ${!ready||loading?'disabled':''}`}><span>↥</span> {loading?'読み込み中…':'CSVを読み込む'}<input aria-label="CSVファイル" type="file" accept=".csv,text/csv" disabled={!ready||loading} onChange={importFile}/></label></div>
   </section>
   {error&&<div className="error-message" role="alert" aria-label="CSV読込エラー"><strong>データを確認してください</strong><span>{error}</span></div>}
-  <div className="notice" role="status"><span className="notice-dot"/>{notice}</div>
+  <div className="notice" role="status" aria-label="データ状態"><span className="notice-dot"/>{notice}</div>
   {!dataset?<div className="loading-panel">ローカルワークスペースを準備しています…</div>:<>
   <div className="research-grid">
-   <section className="chart-panel"><div className="chart-top"><div><div className="section-caption">MARKET OVERVIEW <span data-testid="data-source">{dataset.source==='demo'?'DEMO / 架空データ':'CSV / ローカル'}</span></div><h3 data-testid="dataset-name">{dataset.name}</h3><p className="dataset-details">{dataset.market==='JP'?'日本株':'米国株'} <span>·</span> {dataset.currency} <span>·</span> <b data-testid="dataset-timeframe">{timeframeLabel(dataset.timeframe)}</b> <span>·</span> {cursor.toLocaleString()} / {dataset.candles.length.toLocaleString()}本</p></div><div className="price"><strong>{last?.close.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong><span className={change>=0?'positive':'negative'}>{change>=0?'+':''}{change.toFixed(2)}% <small>前の足比</small></span></div></div>
-   <div className="chart-toolbar"><div><span className="legend candle-legend">OHLC</span><span className="legend ma5">MA 5</span><span className="legend ma20">MA 20</span><span className="legend volume">出来高</span></div><span className="query-badge">QUERY / 直近20本</span></div>
+   <section className="chart-panel" id="replay"><div className="chart-top"><div><div className="section-caption">現在のチャート <span data-testid="data-source">{dataset.source==='demo'?'DEMO / 架空データ':'CSV / ローカル'}</span></div><h3 data-testid="dataset-name">{dataset.name}</h3><p className="dataset-details">{dataset.market==='JP'?'日本株':'米国株'} <span>·</span> {dataset.currency} <span>·</span> <b data-testid="dataset-timeframe">{timeframeLabel(dataset.timeframe)}</b> <span>·</span> {cursor.toLocaleString()} / {dataset.candles.length.toLocaleString()}本</p></div><div className="price"><strong>{last?.close.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong><span className={change>=0?'positive':'negative'}>{change>=0?'+':''}{change.toFixed(2)}% <small>前の足比</small></span></div></div>
+   <div className="ohlc-strip">始値 <b>{last?.open.toFixed(2)}</b> 高値 <b>{last?.high.toFixed(2)}</b> 安値 <b>{last?.low.toFixed(2)}</b> 終値 <b>{last?.close.toFixed(2)}</b></div><div className="chart-toolbar"><div><span className="legend ma20">SMA 20</span><span className="legend ma5">SMA 60</span><span className="legend ma200">SMA 200</span><span className="legend volume">出来高</span></div><span className="query-badge">QUERY / 直近20本</span></div>
    <PriceChart candles={visible} timeframe={dataset.timeframe} pattern={pattern}/>
    <div className="replay-controls" aria-label="リプレイ操作"><button className="button secondary" onClick={()=>seek(Math.min(20,dataset.candles.length))}>先頭</button><button className="button secondary" disabled={cursor<=1} onClick={()=>seek(cursor-1)}>1本戻る</button><button className="button primary" disabled={cursor>=dataset.candles.length} onClick={()=>setPlaying(!playing)}>{playing?'停止':'再生'}</button><button className="button secondary" disabled={cursor>=dataset.candles.length} onClick={()=>seek(cursor+1)}>1本進む</button><button className="button secondary" onClick={()=>seek(dataset.candles.length)}>末尾</button><input type="range" aria-label="リプレイ位置" min={1} max={dataset.candles.length} value={cursor} onChange={e=>seek(Number(e.target.value))}/><span data-testid="replay-count">{cursor}本時点</span></div>
    <div className="pattern-panel" data-testid="pattern-panel"><strong>{pattern.name}</strong><span className="outline-tag">{pattern.status}</span>{pattern.neckline&&<span>ネックライン {pattern.neckline.toFixed(2)}</span>}<p>{pattern.reason} ローソク足：{pattern.candle}</p></div>
    <div className="chart-caption"><span>横スクロール・拡大縮小で過去の足を確認</span><span>{last&&formatTime(last.time,dataset.timeframe)}</span></div>
    <div className="query-summary"><div><span className="step">02</span><div><strong>検索対象の20本</strong><p>{query&&formatTime(query[0].time,dataset.timeframe)} → {last&&formatTime(last.time,dataset.timeframe)}</p></div></div><span className="outline-tag">終値基準で正規化</span></div>
    <div className="method-panel"><p className="eyebrow">HOW WE COMPARE</p><h4>価格の違いをならして、形状を比較。</h4><div className="weight-grid">{[['全体の形状','50%'],['最後の足','25%'],['直近3本','15%'],['値幅・出来高','10%']].map(([label,weight])=><div key={label}><span>{label}</span><strong>{weight}</strong></div>)}</div><p className="muted">重みは暫定値です。同じデータ・条件から、同じ検索結果を返します。</p></div>
+   <section className="decision-memo"><h3>判断メモ <small>このトレードに関するメモ・気づき</small></h3><textarea aria-label="判断メモ" value={memo} maxLength={2000} onChange={e=>setMemo(e.target.value)} placeholder="なぜ買う・売る・見送るのか。注文や見送りの記録と一緒に保存されます。"/><p>結果だけで過去の判断を正解・不正解にしない。</p></section>
    </section>
-   <aside className="matches-panel"><div className="matches-title"><div><p className="eyebrow">HISTORICAL MATCHES</p><h3>過去の類似チャート</h3></div><span className="count-badge">TOP 5</span></div><p className="matches-description">同じ銘柄・時間足の過去区間を比較。<br/>スコアは形の近さを示します。</p>
+   <aside className="matches-panel"><div className="matches-title"><div><p className="eyebrow">HISTORICAL MATCHES</p><h3>類似パターン</h3></div><a href="#research" className="count-badge">詳細を見る →</a></div><p className="matches-description">同じ銘柄・時間足の過去区間を比較。<br/>スコアは形の近さを示します。</p>
     {searching?<div className="empty-state">過去の20本区間を検索中…</div>:matches.length?matches.map((match,i)=><MatchCard key={match.startIndex} match={match} candles={visible} timeframe={dataset.timeframe} index={i} name={dataset.name}/>):<div className="empty-state">{visible.length<20?'分析には20本以上のローソク足が必要です。':'重複しない過去20本の候補がありません。60本以上のデータを読み込んでください。'}</div>}
     <div className="score-note"><span>ⓘ</span><p><strong>類似度 ≠ 上昇確率</strong>将来の値動きを予測するものではありません。結果の区間同士と現在の20本は重複させません。</p></div>
    </aside>
+   <PaperDesk key={`${dataset.id}:${paperEpoch}`} dataset={dataset} candles={visible} cursor={cursor} analysis={analysis} pattern={pattern} reason={memo} onRestore={count=>{setPlaying(false);setPosition({id:dataset.id,count});}}/>
   </div>
-  <div className="research-cost"><label>片道コスト（手数料＋スリッページ / bps）<input aria-label="片道コストbps" type="number" min="0" max="1000" value={cost} onChange={e=>setCost(Math.max(0,Math.min(1000,Number(e.target.value)||0)))}/></label><p>20本後の結果までが検索対象20本の開始前に完了した事例だけを表示します。</p></div>
+  <div className="research-cost" id="research"><label>片道コスト（手数料＋スリッページ / bps）<input aria-label="片道コストbps" type="number" min="0" max="1000" value={cost} onChange={e=>setCost(Math.max(0,Math.min(1000,Number(e.target.value)||0)))}/></label><p>20本後の結果までが検索対象20本の開始前に完了した事例だけを表示します。</p></div>
   {analysis&&<ResearchPanel data={analysis}/>}
-  <section className="session-panel"><div><p className="eyebrow">YOUR LOCAL SESSION</p><strong>{saveState}</strong><p>保存先はこのブラウザのIndexedDB。別のPCへはCSVで持ち運べます。</p></div><div className="session-actions"><button className="button secondary" onClick={()=>download()}>CSVを書き出す</button><button className="button secondary" onClick={()=>download(true)}>サンプルCSV</button><button className="text-button" onClick={()=>void clear()}>保存データを削除</button></div></section>
-  <section className="roadmap"><p className="eyebrow">BUILDING THE RESEARCH FLOW</p><div><span className="current">01 チャート・類似検索</span><span>02 パターン・統計検証</span><span>03 PAPER売買 <small>未実装</small></span><span>04 A〜D評価 <small>未実装</small></span></div></section>
+  <section className="session-panel" id="local-session"><div><p className="eyebrow">YOUR LOCAL SESSION</p><strong>{saveState}</strong><p>保存先はこのブラウザのIndexedDB。別のPCへはCSVで持ち運べます。</p></div><div className="session-actions"><button className="button secondary" onClick={()=>download()}>CSVを書き出す</button><button className="button secondary" onClick={()=>download(true)}>サンプルCSV</button><button className="text-button" onClick={()=>void clear()}>保存データを削除</button></div></section>
+  <section className="roadmap"><p className="eyebrow">BUILDING THE RESEARCH FLOW</p><div><span className="current">01 チャート・類似検索</span><span>02 パターン・統計検証</span><span>03 PAPER売買</span><span>04 A〜D評価 <small>未実装</small></span></div></section>
   </>}
   <footer><span>PATTERN LAB <small>個人の投資研究・練習用 / 利益を保証しません</small></span><a href="https://www.tradingview.com/" target="_blank" rel="noreferrer">Charts powered by TradingView Lightweight Charts™ ↗</a></footer>
  </main>;

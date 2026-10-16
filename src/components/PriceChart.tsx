@@ -19,7 +19,7 @@ export default function PriceChart({candles,timeframe,pattern}:{candles:Candle[]
   const series=chart.addSeries(CandlestickSeries,{upColor:'#51cfaa',downColor:'#ee7c85',wickUpColor:'#51cfaa',wickDownColor:'#ee7c85',borderVisible:false,priceFormat:{type:'price',precision:2,minMove:.01}});
   series.setData(candles.map(c=>({...c,time:c.time as UTCTimestamp})));
   if(pattern?.neckline)series.createPriceLine({price:pattern.neckline,color:'#68d5b1',lineWidth:1,lineStyle:2,axisLabelVisible:true,title:pattern.name});
-  for(const [period,color] of [[5,'#e4b26b'],[20,'#8194f5']] as const){
+  for(const [period,color] of [[20,'#2ca8ff'],[60,'#e4b26b'],[200,'#ee4d77']] as const){
    const ma=chart.addSeries(LineSeries,{color,lineWidth:1,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
    ma.setData(movingAverage(candles,period).map(p=>({...p,time:p.time as UTCTimestamp})));
   }
