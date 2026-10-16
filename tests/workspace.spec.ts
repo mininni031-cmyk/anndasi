@@ -1,0 +1,38 @@
+import { test,expect } from '@playwright/test';
+test('CSV research flow, errors and local restoration',async({page})=>{
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('/');
+ await expect(page.getByRole('heading',{name:'PATTERN LAB',exact:true})).toBeVisible();
+ await expect(page.getByTestId('match-card')).toHaveCount(5);
+ await expect(page.getByTestId('main-chart').locator('canvas').first()).toBeVisible();
+ const downloadPromise=page.waitForEvent('download');
+ await page.getByRole('button',{name:'サンプルCSV'}).click();
+ const download=await downloadPromise;
+ const path=await download.path();
+ await page.getByLabel('CSVファイル').setInputFiles(path!);
+ await expect(page.getByTestId('data-source')).toHaveText('CSV / ローカル');
+ await expect(page.getByTestId('match-card')).toHaveCount(5);
+ await page.getByLabel('CSVファイル').setInputFiles({name:'bad.csv',mimeType:'text/csv',buffer:Buffer.from('time,open\n2026-01-01,100')});
+ await expect(page.getByRole('alert')).toContainText('必須列');
+ await expect(page.getByTestId('data-source')).toHaveText('CSV / ローカル');
+ await page.reload();
+ await expect(page.getByTestId('data-source')).toHaveText('CSV / ローカル');
+ await expect(page.getByTestId('match-card')).toHaveCount(5);
+ await page.getByLabel('市場').selectOption('US');
+ await page.getByRole('button',{name:'架空データを表示'}).click();
+ await expect(page.getByTestId('dataset-timeframe')).toHaveText('1分足');
+ await expect(page.getByTestId('match-card')).toHaveCount(5);
+ await page.getByRole('button',{name:'保存データを削除'}).click();
+ await expect(page.getByRole('status')).toContainText('保存データを削除');
+ await page.reload();
+ await expect(page.getByTestId('dataset-timeframe')).toHaveText('日足');
+ expect(errors).toEqual([]);
+});
+test('short CSV is charted with an honest insufficient-history status',async({page})=>{
+ await page.goto('/');await expect(page.getByTestId('match-card')).toHaveCount(5);
+ await page.getByLabel('銘柄名').fill('SHORT');
+ await page.getByLabel('CSVファイル').setInputFiles({name:'short.csv',mimeType:'text/csv',buffer:Buffer.from('time,open,high,low,close,volume\n2026-01-01,100,110,90,105,1000')});
+ await expect(page.getByTestId('dataset-name')).toHaveText('SHORT');
+ await expect(page.getByText('分析には20本以上のローソク足が必要です。')).toBeVisible();
+ await expect(page.getByTestId('match-card')).toHaveCount(0);
+});
