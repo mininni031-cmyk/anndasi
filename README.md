@@ -1,5 +1,11 @@
 # PATTERN LAB
 
+## ブラウザで開く
+
+**アプリURL：[PATTERN LAB](https://pattern-lab.minikun130.chatgpt.site)**
+
+Sitesで本人限定公開しています。アプリの利用にNode.jsのインストールは不要です。同じChatGPTアカウントでログインしてください。GitHubはソース保存先、上のリンクは動作中のアプリです。CSVはブラウザ内で処理・保存し、PC間で自動同期しません。
+
 CSVで株式チャートの形を比較する、個人向けローカル研究アプリ。Phase 1を実装しています。
 
 **無料構成 / 実注文なし / 有料APIなし / CSV外部送信なし。**
